@@ -1,0 +1,53 @@
+#Trailing Stop Loss
+#This file determines where to set a trailing stop loss.
+#If I have a stock that I like but am afraid of a drop in the market, where should I set a stop loss so I sleep at night?
+#The biggest question is when to get back in.  Assume the user gets back in when the stock gets back to the stop loss.
+#If you don't get back to your highs, you need to think, do I want to own this stock again or should I employ my cash elseware?
+#Create some sample stock prices, then estimate a good trailing stop loss percentage.
+
+#Next Steps, create a monty carlo and compare the number of exits to the percentage trailing.
+#Note, changing from .05 to .06 increases exits from 5 to 7 for this data set.
+
+import pandas as pd
+import matplotlib as plt
+import numpy as np
+import matplotlib.pyplot as plt
+from numpy import random
+
+random.seed(5)
+number_of_periods=300
+df=pd.DataFrame()
+df["Dates"]=pd.date_range("1/1/2000",periods=number_of_periods)
+df["Stock_A"] = np.random.normal(0,5, size=number_of_periods)
+df["Stock_A"] = df["Stock_A"].cumsum()
+df["Stock_A"]=df["Stock_A"]+500
+#Assume you are in the marke when stock is at or above the stop loss
+df["In_Market"]=True 
+df["Sell"]=0 #Count the number of times the user sells.  Defined as when the price goes below the stop loss and you 
+
+#Continous readjustment
+#Pick an amount and then when stock increaes, keep the same percentage.
+stop_loss_percent=.05  #5% never crosses after 100 iterations.
+df.at[0,"Stop_Loss"]=df.at[0,"Stock_A"]*(1-stop_loss_percent)
+for i in range(1,df.shape[0]):
+    #Only increase if new stop loss is greater than old
+    if df.at[i,"Stock_A"]*(1-stop_loss_percent)>df.at[i-1,"Stop_Loss"]:
+        df.at[i,"Stop_Loss"]=df.at[i,"Stock_A"]*(1-stop_loss_percent)
+    else:
+        df.at[i,"Stop_Loss"]=df.at[i-1,"Stop_Loss"]
+    #If stock is greater than stop loss, in market = true
+    #if you are in market and price drops below stop loss = in market = false and count number of times you exit 
+    if df.at[i,"Stock_A"]>df.at[i,"Stop_Loss"]:
+        df.at[i,"In_Market"]=True
+    else:
+        df.at[i,"In_Market"]=False
+    #count the cross overs
+    #Check if you were in the market yesterday
+    if df.at[i-1,"In_Market"]==True and df.at[i,"Stock_A"]<df.at[i,"Stop_Loss"]:    
+        df.at[i,"Sell"]=1
+    
+print("Number of Market Exits")
+print(df["Sell"].sum())
+
+df.plot(x="Dates",y=["Stock_A","Stop_Loss"])
+#df.to_csv("trailing.csv")

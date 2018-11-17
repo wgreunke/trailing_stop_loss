@@ -1,0 +1,92 @@
+#Trailing Stop Loss 
+#This file determines where to set a trailing stop loss.
+#If I have a stock that I like but am afraid of a drop in the market, where should I set a stop loss so I sleep at night?
+#The biggest question is when to get back in.  Assume the user gets back in when the stock gets back to the stop loss.
+#If you don't get back to your highs, you need to think, do I want to own this stock again or should I employ my cash elseware?
+#Create some sample stock prices, then estimate a good trailing stop loss percentage.
+
+#Next Steps, create a monty carlo and compare the number of exits to the percentage trailing.
+#Note, changing from .05 to .06 increases exits from 5 to 7 for this data set.
+
+import pandas as pd
+import matplotlib as plt
+import numpy as np
+import matplotlib.pyplot as plt
+from numpy import random
+
+
+trail_df=pd.DataFrame()
+#Set up the different percents that you are going to loop through.
+trail_df["percent"]=0
+trail_df["market_exits"]=0
+trail_df["trial"]=0
+
+
+number_of_periods=300
+df=pd.DataFrame()
+df["Dates"]=pd.date_range("1/1/2000",periods=number_of_periods)
+df["Stock_A"] = np.random.normal(0,5, size=number_of_periods)
+df["Stock_A"] = df["Stock_A"].cumsum()
+df["Stock_A"]=df["Stock_A"]+500
+#Assume you are in the marke when stock is at or above the stop loss
+df["In_Market"]=True 
+df["Sell"]=0 #Count the number of times the user sells.  Defined as when the price goes below the stop loss and you 
+
+#Continous readjustment
+#Pick an amount and then when stock increaes, keep the same percentage.
+stop_loss_percent=.05  #5% never crosses after 100 iterations.
+
+#Do a Monte Carlo by creating different random seeds
+#For each seed, iterate through the different percentage ranges
+#Create a new dataframe for each iteration and then add that to the previous dataframe.
+
+random.seed(1)
+
+temp_df=pd.DataFrame()
+temp_df["percent"]=[.01,.02,.03, .04,.05, .06, .07, .08, .09, .1, .12, .14, .16, .18, .20]
+temp_df["market_exits"]=0
+temp_df["trial"]=0
+
+for k in range(1,100):  #This determines how many simulations to run.
+    temp_df["trial"]=k
+
+    #Reset your stock price
+    df["Dates"]=pd.date_range("1/1/2000",periods=number_of_periods)
+    df["Stock_A"] = np.random.normal(0,5, size=number_of_periods)
+    df["Stock_A"] = df["Stock_A"].cumsum()
+    df["Stock_A"]=df["Stock_A"]+500
+    #Assume you are in the marke when stock is at or above the stop loss
+    df["In_Market"]=True 
+    df["Sell"]=0 #Count the number of times the user sells.  Defined as when the price goes below the stop loss and you 
+    
+    
+    for j in range(0,temp_df.shape[0]):
+        stop_loss_percent=temp_df.at[j,"percent"]
+        df["Sell"]=0
+        df.at[0,"Stop_Loss"]=df.at[0,"Stock_A"]*(1-stop_loss_percent)
+        for i in range(1,df.shape[0]):
+            #Only increase if new stop loss is greater than old
+            if df.at[i,"Stock_A"]*(1-stop_loss_percent)>df.at[i-1,"Stop_Loss"]:
+                df.at[i,"Stop_Loss"]=df.at[i,"Stock_A"]*(1-stop_loss_percent)
+            else:
+                df.at[i,"Stop_Loss"]=df.at[i-1,"Stop_Loss"]
+            #If stock is greater than stop loss, in market = true
+            #if you are in market and price drops below stop loss = in market = false and count number of times you exit 
+            if df.at[i,"Stock_A"]>df.at[i,"Stop_Loss"]:
+                df.at[i,"In_Market"]=True
+            else:
+                df.at[i,"In_Market"]=False
+            #count the cross overs
+            #Check if you were in the market yesterday
+            if df.at[i-1,"In_Market"]==True and df.at[i,"Stock_A"]<df.at[i,"Stop_Loss"]:    
+                df.at[i,"Sell"]=1
+        temp_df.at[j,"market_exits"]=df["Sell"].sum() #End of the j for loop
+    trail_df=trail_df.append(temp_df) # End k for loop
+
+print(trail_df.head())
+trail_df.plot(x="percent",y="market_exits",style="o")
+df.plot(x="Dates",y=["Stock_A","Stop_Loss"])
+trail_df.to_csv("trailing.csv")
+
+#Creat Boxplot
+trail_df.boxplot(by='percent', column=['market_exits'], grid=False)
